@@ -21,17 +21,12 @@
 	}).
 
 run(Server, Ws, Where) ->
-    io:format("buller: run as ~p\n", [Server]),
-    io:format("ID = ~p\n", [erlang:process_info(self(), registered_name)]),
     true = register(Server, self()),
     Canvas = wse:id(Where),
     {ok,Ctx} = wse:call(Ws, Canvas, getContext, ["2d"]),
     {ok,Width} = wse:get(Ws, Canvas, width),
-    io:format("width of ~p = ~w\n", [Where, Width]),
     {ok,Height} = wse:get(Ws, Canvas, height),
-    io:format("height of ~p = ~w\n", [Where, Height]),
     S = #s{ws=Ws, canvas=Canvas, ctx=Ctx, width=Width, height=Height},
-    io:format("S = ~p\n", [S]),
     command_loop(S).
 
 command_loop(S) ->
@@ -83,6 +78,14 @@ command_loop(S) ->
 			    {clearRect,[X,Y,Width,Height]}
 			   ]),
 	    reply(From, Result),
+	    command_loop(S);
+
+	{width, From, _Arg} ->
+	    reply(From, S#s.width),
+	    command_loop(S);
+
+	{height, From, _Arg} ->
+	    reply(From, S#s.height),
 	    command_loop(S);
 
 	{code_change, From, _Arg} ->

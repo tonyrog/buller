@@ -16,6 +16,8 @@
 -export([rect/1]).
 -export([text/1]).
 -export([clear/0]).
+-export([width/0]).
+-export([height/0]).
 -export([code_change/0]).
 
 -define(BULLER_SERV, buller_serv).
@@ -38,6 +40,12 @@ text(Args) ->
 
 clear() ->
     call(clear, args([])).
+
+width() ->
+    call(width, args([])).
+
+height() ->
+    call(height, args([])).
 
 code_change() ->
     call(code_change, args([])).
