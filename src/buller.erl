@@ -8,6 +8,7 @@
 -module(buller).
 
 -export([run/2]).
+-export([start/0]).
 
 -compile(export_all).
 
@@ -18,6 +19,9 @@
 -export([code_change/0]).
 
 -define(BULLER_SERV, buller_serv).
+
+start() ->
+    application:ensure_all_started(buller).
 
 run(Ws, Where) ->
     io:format("buller: called\n"),
@@ -45,7 +49,11 @@ normalize(Commands) when is_list(Commands) ->
     [normalize(Command) || Command <- Commands].
 
 args(List) when is_list(List) ->
-    maps:from_list(List);
+    maps:from_list(
+      [if is_atom(Key) -> {Key,Value};
+	  is_list(Key) -> 
+	       {binary_to_atom(iolist_to_binary(Key)), Value}
+       end || {Key,Value} <- List]);
 args(Map) when is_map(Map) ->
     Map.
 

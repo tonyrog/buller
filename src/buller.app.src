@@ -2,8 +2,8 @@
  [{description, "Buller bulletin board"},
   {vsn, git},
   {modules, ["@@MODULES@@"]},
-%%  {mod, {App_app, []}},
+  {mod, {buller_app, []}},
 %%  {registered, [App_srv]},
-  {env, []},
-  {applications,[kernel,stdlib,wse]}
+  {env, [{port,1235},{ifaddr, any}]},
+  {applications,[kernel,stdlib,wse,rester]}
   ]}.
