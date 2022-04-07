@@ -9,6 +9,10 @@ anarchistic bulletin board
 
 	cd buller/priv
 	firefox buller.html
+	
+or kiosk mode, FULL SCREEN! use ctrl-q to quit
+
+	firefox --kiosk --private-window buller.html
 
 # rect/text commands
 
