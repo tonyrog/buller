@@ -75,11 +75,15 @@ normalize(Commands) when is_list(Commands) ->
 args(List) when is_list(List) ->
     maps:from_list(
       [if is_atom(Key) -> {Key,Value};
+	  is_binary(Key) -> {binary_to_atom(Key), arg_value(Value)};
 	  is_list(Key) -> 
-	       {binary_to_atom(iolist_to_binary(Key)), Value}
+	       {binary_to_atom(iolist_to_binary(Key)), arg_value(Value)}
        end || {Key,Value} <- List]);
 args(Map) when is_map(Map) ->
     Map.
+
+arg_value(Bin) when is_binary(Bin) -> binary_to_list(Bin);
+arg_value(X) -> X.
 
 call(Req, Args) ->
     Ref = make_ref(),

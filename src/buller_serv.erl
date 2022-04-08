@@ -16,17 +16,55 @@
 	 ws,
 	 canvas,
 	 ctx,
-	 width,
-	 height
+	 screen_width,
+	 screen_height,
+	 screen_avail_width,
+	 screen_avail_height,
+	 screen_colorDepth,
+	 screen_pixelDepth,
+	 window_width,
+	 window_height,
+	 canvas_width,
+	 canvas_height
 	}).
+
+-define(rec_info(T,R),lists:zip(record_info(fields,T),tl(tuple_to_list(R)))).
+
 
 run(Server, Ws, Where) ->
     true = register(Server, self()),
     Canvas = wse:id(Where),
     {ok,Ctx} = wse:call(Ws, Canvas, getContext, ["2d"]),
-    {ok,Width} = wse:get(Ws, Canvas, width),
-    {ok,Height} = wse:get(Ws, Canvas, height),
-    S = #s{ws=Ws, canvas=Canvas, ctx=Ctx, width=Width, height=Height},
+    {ok,CanvasWidth} = wse:get(Ws, Canvas, width),
+    {ok,CanvasHeight} = wse:get(Ws, Canvas, height),
+
+    {ok,ScreenWidth} = wse:get(Ws, wse:id(screen), width),
+    {ok,ScreenHeight} = wse:get(Ws, wse:id(screen), height),
+
+    {ok,ScreenAvailWidth} = wse:get(Ws, wse:id(screen), availWidth),
+    {ok,ScreenAvailHeight} = wse:get(Ws, wse:id(screen), availHeight),
+
+    {ok,WindowWidth} = wse:get(Ws, wse:id(window), innerWidth),
+    {ok,WindowHeight} = wse:get(Ws, wse:id(window), innerHeight),
+
+    {ok,ScreenColorDepth} = wse:get(Ws, wse:id(screen), colorDepth),
+    {ok,ScreenPixelDepth} = wse:get(Ws, wse:id(screen), pixelDepth),
+
+    S = #s{ws=Ws, 
+	   canvas=Canvas, 
+	   ctx=Ctx,
+	   canvas_width=CanvasWidth, 
+	   canvas_height=CanvasHeight,
+	   window_width=WindowWidth, 
+	   window_height=WindowHeight,
+	   screen_width=ScreenWidth, 
+	   screen_height=ScreenHeight,
+	   screen_avail_width=ScreenAvailWidth, 
+	   screen_avail_height=ScreenAvailHeight,
+	   screen_colorDepth=ScreenColorDepth,
+	   screen_pixelDepth=ScreenPixelDepth
+	  },
+    io:format("S = ~p\n", [?rec_info(s,S)]),
     command_loop(S).
 
 command_loop(S) ->
@@ -71,8 +109,8 @@ command_loop(S) ->
 	{clear, From, Arg} ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
-	    Width = maps:get(width, Arg, S#s.width),
-	    Height = maps:get(height, Arg, S#s.height),
+	    Width = maps:get(width, Arg, S#s.canvas_width),
+	    Height = maps:get(height, Arg, S#s.canvas_height),
 	    Result = 
 		command(S, [
 			    {clearRect,[X,Y,Width,Height]}
@@ -141,7 +179,7 @@ command_loop(S) ->
 		    reply(From, {error, color_error}),
 		    command_loop(S);
 		{R,G,B,A} ->
-		    io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
+		    %% io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
 		    {ok,ImageData} = wse:call(S#s.ws, S#s.ctx, getImageData,
 					      [X,Y,1,1]),
 		    {ok,Data} = wse:get(S#s.ws, ImageData, data),
@@ -163,7 +201,7 @@ command_loop(S) ->
 	    {ok,G} = wse:get(S#s.ws, Data, 1),
 	    {ok,B} = wse:get(S#s.ws, Data, 2),
 	    {ok,A} = wse:get(S#s.ws, Data, 3),
-	    io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
+	    %% io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
 	    Value = "#" ++ 
 		tl(integer_to_list(16#100+R,16)) ++
 		tl(integer_to_list(16#100+G,16)) ++
@@ -173,11 +211,11 @@ command_loop(S) ->
 	    command_loop(S);
 
 	{width, From, _Arg} ->
-	    reply(From, S#s.width),
+	    reply(From, S#s.canvas_width),
 	    command_loop(S);
 
 	{height, From, _Arg} ->
-	    reply(From, S#s.height),
+	    reply(From, S#s.canvas_height),
 	    command_loop(S);
 
 	{code_change, From, _Arg} ->
