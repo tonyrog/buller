@@ -75,6 +75,21 @@ handle_http_post(_Socket, Request, Body, _XArgs) ->
 	    buller:rect(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
+        ["image"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:image(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["video"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:video(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+	["pixel"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:setpixel(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
         ["clear"] ->
 	    %% Args = parse_json_body(Request, Body),
 	    buller:clear(),
@@ -93,7 +108,11 @@ handle_http_get(_Socket, #http_request{uri = Url}, _Body, _XArgs) ->
         ["height"] ->
 	    {200, integer_to_list(buller:height()),
 	     [{content_type, "text/plain"}]};
-
+        ["pixel"] ->
+            Args = uri_string:dissect_query(Url#url.querypart),
+	    Pixel = buller:getpixel(Args),
+	    {200, Pixel,
+	     [{content_type, "text/plain"}]};
         _Tokens ->
             501
     end.

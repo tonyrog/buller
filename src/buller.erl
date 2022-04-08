@@ -15,6 +15,10 @@
 -export([command/1]).
 -export([rect/1]).
 -export([text/1]).
+-export([image/1]).
+-export([video/1]).
+-export([setpixel/1]).
+-export([getpixel/1]).
 -export([clear/0]).
 -export([width/0]).
 -export([height/0]).
@@ -37,6 +41,18 @@ rect(Args) ->
 
 text(Args) ->
     call(text, args(Args)).
+
+image(Args) ->
+    call(image, args(Args)).
+
+video(Args) ->
+    call(video, args(Args)).
+
+setpixel(Args) ->
+    call(setpixel, args(Args)).
+
+getpixel(Args) ->
+    call(getpixel, args(Args)).
 
 clear() ->
     call(clear, args([])).
