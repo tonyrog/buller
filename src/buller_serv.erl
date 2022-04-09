@@ -73,6 +73,7 @@ command_loop(S) ->
 	    Result = command(S, CmdList),
 	    reply(From, Result);
 	{rect, From, Arg} ->
+	    io:format("Rect: ~p\n", [Arg]),
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    Width = maps:get(width, Arg, 0),
@@ -86,6 +87,7 @@ command_loop(S) ->
 	    reply(From, Result),
 	    command_loop(S);
 	{text, From,  Arg} ->
+	    io:format("Text: ~p\n", [Arg]),
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    FontSize = maps:get('font-size', Arg, 24),

@@ -65,32 +65,32 @@ handle_http_request(Socket, Request, Body, XArgs) ->
 handle_http_post(_Socket, Request, Body, _XArgs) ->
     Url = Request#http_request.uri,
     case string:tokens(Url#url.path, "/") of
-        ["text"] ->
+        ["v1","text"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:text(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-        ["rect"] ->
+        ["v1","rect"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:rect(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-        ["image"] ->
+        ["v1","image"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:image(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-        ["video"] ->
+        ["v1","video"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:video(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-	["pixel"] ->
+	["v1","pixel"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:setpixel(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-        ["clear"] ->
+        ["v1","clear"] ->
 	    %% Args = parse_json_body(Request, Body),
 	    buller:clear(),
 	    {200, "OK",
@@ -102,13 +102,13 @@ handle_http_post(_Socket, Request, Body, _XArgs) ->
 
 handle_http_get(_Socket, #http_request{uri = Url}, _Body, _XArgs) ->
     case string:tokens(Url#url.path, "/") of
-        ["width"] ->
+        ["v1","width"] ->
 	    {200, integer_to_list(buller:width()),
 	     [{content_type, "text/plain"}]};
-        ["height"] ->
+        ["v1","height"] ->
 	    {200, integer_to_list(buller:height()),
 	     [{content_type, "text/plain"}]};
-        ["pixel"] ->
+        ["v1","pixel"] ->
             Args = uri_string:dissect_query(Url#url.querypart),
 	    Pixel = buller:getpixel(Args),
 	    {200, Pixel,

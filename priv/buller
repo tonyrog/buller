@@ -1,0 +1,218 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%  send buller commands
+%%
+-mode(compile).
+-export([main/1]).
+
+-define(BULLER_VSN, "v1").
+-define(BULLER_URL, "http://127.0.0.1:1235").
+-define(is_digit(C), (((C)>=$0) andalso ((C)=<$9))).
+
+main([]) ->
+    usage();
+main(Args)->
+    (catch error_logger:tty(false)),
+    Options = process_args(Args),
+    Url = get_url(Options),
+    send_commands(Url, Options),
+    ok.
+
+send_commands(Url, [{command,Command,Args}|Options]) ->
+    Args1 = [{list_to_atom(Key),Value} || {Key,Value} <- Args],
+    CommandUrl = Url++"/"++Command,
+    io:format("Post: ~s [~p]\n", [CommandUrl, Args1]),
+    rester_http:wpost(CommandUrl,
+		      [{'Content-Type', "application/json"}],
+		      Args1),
+    send_commands(Url, Options);
+send_commands(Url, [_|Options]) ->
+    send_commands(Url, Options);
+send_commands(Url, []) ->
+    ok.
+
+usage() ->
+    io:format("usage: buller [<options>] <command> ...\n"
+	      " OPTIONS\n"
+	      "   -h                help\n"
+	      "   -d                debug mode\n"
+	      "   --vsn v1          api version (" ?BULLER_VSN ")\n"
+	      "   --url <url>       buller server (" ?BULLER_URL ")\n"
+	      "   --user|-u user:pass  authentication\n"
+	      "   --basic           use basic authentication\n"
+	      "   --digest          use digest authentication\n"
+	      "   --negotiate       use the method selected by server\n"
+	      "  <command>\n"
+	      "  pixel x=<coord> y=<coord> color=<color>\n"
+	      "  text x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> text=<string> color=<color>\n"
+	      "  image x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
+	      "  video x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
+	      "  rect x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
+	      "  clear x=<coord> y=<coord> width=<dim> height=<dim>\n"
+	     ).
+
+if_debug(Options, Fun) ->
+    case proplists:get_value(debug, Options, false) of
+	true ->
+	    Fun();
+	false ->
+	    ok
+    end.
+
+get_url(Options) ->
+    Vsn = get_vsn(Options),
+    Url = get_url_(Options),
+    try rester_url:parse(Url, sloppy) of
+	_UrlTuple ->
+	    io:format("using url ~s\n", [Url]),
+	    url_join(Url, Vsn)
+    catch
+	error:_ ->
+	    io:format("buller: can not parse url ~s\n", [Url]),
+	    halt(1)
+    end.
+
+url_join(Url, Path) ->
+    case lists:last(Path) of
+	$/ -> Url ++ Path;
+	_ -> Url ++ "/" ++ Path
+    end.
+
+get_url_(Options) ->
+    case getopt("url",Options,undefined) of
+	undefined ->
+	    Url0 = os:getenv("BULLER_URL"),
+	    if Url0 =:= ""; Url0 =:= false ->
+		    ?BULLER_URL;
+	       true ->
+		    Url0
+	    end;
+	Url ->
+	    Url
+    end.
+
+get_vsn(Options) ->
+    getopt("vsn", Options, ?BULLER_VSN).
+	
+process_args([]) ->
+    [];
+process_args(Args) ->
+    Options = parse_opts(Args),
+    case getbool("help", Options) of
+	true -> usage();
+	false ->
+	    case getbool("h", Options) of
+		true -> usage();
+		false -> group_commands(Options)
+	    end
+    end.
+
+group_commands(Options) ->
+    group_commands_(Options,[]).
+
+group_commands_([{arg,Command}|Options], Acc) ->
+    {Args, Options1} = collect_args(Options,[]),
+    group_commands_(Options1, [{command,Command,Args}|Acc]);
+group_commands_([Other|Options], Acc) ->
+    group_commands_(Options, [Other|Acc]);
+group_commands_([], Acc) ->
+    lists:reverse(Acc).
+
+collect_args([{arg,Name,Value}|Options], Args) ->
+    collect_args(Options, [{Name,Value}|Args]);
+collect_args(Options, Args) ->
+    {lists:reverse(Args), Options}.
+
+
+getopt(Name, Options) ->
+    getopt(Name, Options, undefined).
+
+getopt(Name, Options, Default) ->
+    case getopt_(Name, Options) of
+	{ok,Value} -> Value;
+	undefined -> Default
+    end.
+
+getbool(Name, Options) ->
+    case getopt_(Name, Options) of
+	undefined -> false;
+	{ok,false} -> false;
+	{ok,true} -> true
+    end.
+
+getopt_(Name, [{option,Name}|_]) -> {ok,true};
+getopt_(Name, [{option,Name,Value}|_]) -> {ok,Value};
+getopt_(Name, [_|Opts]) -> getopt_(Name, Opts);
+getopt_(_Name, []) -> undefined.
+
+parse_opts([]) ->
+    [];
+parse_opts(Args) ->
+    parse_opts_(Args,[]).
+
+parse_opts_(Args,Acc) ->
+    case parse_opt(Args) of
+	{A,[]} -> lists:reverse([A|Acc]);
+	{A,Args1} -> parse_opts_(Args1, [A|Acc])
+    end.
+
+parse_opt([[$-,$-|Opt] | Args]) ->
+    parse_arg(option, Opt, Args);
+parse_opt([Arg=[$-|Opt=[C|_]] | Args]) when ?is_digit(C) ->
+    try to_integer_(Arg, 0) of
+	Int -> {{arg,Int},Args}
+    catch
+	error:_ -> parse_arg(option,Opt,Args)
+    end;
+parse_opt([[$-|Opt] | Args]) ->
+    parse_arg(option, Opt, Args);
+parse_opt([Arg|Args]) ->
+    try to_integer_(Arg, 0) of
+	Int -> {{arg,Int},Args}
+    catch
+	error:_ -> 
+	    parse_arg(arg,Arg,Args)
+    end.
+
+parse_arg(Tag, Name, Args) ->
+    case string:split(Name, "=") of
+	[Name1] ->
+	    {{Tag,Name1},Args};
+	[Name1,[]] ->
+	    case Args of
+		[] -> {{Tag,Name1,""},Args};
+		[Arg=[$-,C|_]|Args1] when ?is_digit(C) ->
+		    try to_integer_(Arg, 0) of
+			Int -> {{Tag,Name1,Int},Args1}
+		    catch
+			error:_ -> {{Tag,Name1},Args}
+		    end;
+		[[$-|_]|_] -> {{Tag,Name1},Args};
+		[Arg=[C|_]|Args1] when ?is_digit(C)->
+		    try to_integer_(Arg, 0) of
+			Int -> {{Tag,Name1,Int},Args1}
+		    catch
+			error:_ -> {{Tag,Name1,Arg},Args1}
+		    end;
+		[Arg|Args1] ->
+		    {{Tag,Name1,Arg},Args1}
+	    end;
+	[Name1,Arg] ->
+	    try to_integer_(Arg, 0) of
+		Int -> {{Tag,Name1,Int},Args}
+	    catch
+		error:_ -> {{Tag,Name1,Arg},Args}
+	    end
+    end.
+
+to_integer_("0x"++Value,0) -> list_to_integer(Value, 16);
+to_integer_("-0x"++Value,0) -> -list_to_integer(Value, 16);
+to_integer_(Value,0) -> list_to_integer(Value, 10);
+to_integer_(Value,Base) -> list_to_integer(Value, Base).
+
+to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
+to_list(Int) when is_integer(Int) -> integer_to_list(Int);
+to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom);
+to_list(Float) when is_integer(Float) -> io_lib:format("~.1f", [Float]);
+to_list(List) when is_list(List) -> List;
+to_list(Term) -> io_lib:format("~p", [Term]).
