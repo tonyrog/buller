@@ -7,18 +7,23 @@
 
 -module(buller).
 
--export([run/2]).
+-export([run/3]).
 -export([start/0]).
 
 -compile(export_all).
 
--export([command/1]).
+%% canvase
+-export([draw/1]).
+-export([draw_rect/1]).
+-export([draw_text/1]).
+-export([draw_image/1]).
+-export([draw_video/1]).
+-export([draw_pixel/1]).
+-export([get_pixel/1]).
+%% svg
 -export([rect/1]).
 -export([text/1]).
--export([image/1]).
--export([video/1]).
--export([setpixel/1]).
--export([getpixel/1]).
+%% get
 -export([clear/0]).
 -export([width/0]).
 -export([height/0]).
@@ -29,12 +34,27 @@
 start() ->
     application:ensure_all_started(buller).
 
-run(Ws, Where) ->
+run(Ws, CanvasID, SvgID) ->
     io:format("buller: called\n"),
-    buller_serv:run(?BULLER_SERV, Ws, Where).
+    buller_serv:run(?BULLER_SERV, Ws, CanvasID, SvgID).
 
-command(Commands) ->
-    call(cmd, normalize(Commands)).
+draw(Commands) ->
+    call(draw, normalize(Commands)).
+
+draw_rect(Args) ->
+    call(draw_rect, args(Args)).
+
+draw_text(Args) ->
+    call(draw_text, args(Args)).
+
+draw_image(Args) ->
+    call(draw_image, args(Args)).
+
+draw_video(Args) ->
+    call(draw_video, args(Args)).
+
+draw_pixel(Args) ->
+    call(draw_pixel, args(Args)).
 
 rect(Args) ->
     call(rect, args(Args)).
@@ -42,17 +62,8 @@ rect(Args) ->
 text(Args) ->
     call(text, args(Args)).
 
-image(Args) ->
-    call(image, args(Args)).
-
-video(Args) ->
-    call(video, args(Args)).
-
-setpixel(Args) ->
-    call(setpixel, args(Args)).
-
-getpixel(Args) ->
-    call(getpixel, args(Args)).
+get_pixel(Args) ->
+    call(get_pixel, args(Args)).
 
 clear() ->
     call(clear, args([])).

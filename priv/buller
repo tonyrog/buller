@@ -13,22 +13,36 @@ main([]) ->
     usage();
 main(Args)->
     (catch error_logger:tty(false)),
-    Options = process_args(Args),
+    Options0 = process_args(Args),
+    Options = group_args(Options0),
     Url = get_url(Options),
-    send_commands(Url, Options),
+    send_argl(Url, Options),
     ok.
 
-send_commands(Url, [{command,Command,Args}|Options]) ->
+process_args([]) ->
+    [];
+process_args(Args) ->
+    Options = parse_opts(Args),
+    case getbool("help", Options) of
+	true -> usage();
+	false ->
+	    case getbool("h", Options) of
+		true -> usage();
+		false -> Options
+	    end
+    end.
+
+send_argl(Url, [{argl,Name,Args}|Options]) ->
     Args1 = [{list_to_atom(Key),Value} || {Key,Value} <- Args],
-    CommandUrl = Url++"/"++Command,
-    io:format("Post: ~s [~p]\n", [CommandUrl, Args1]),
-    rester_http:wpost(CommandUrl,
+    Url1 = Url++"/"++Name,
+    io:format("Post: ~s [~p]\n", [Url1, Args1]),
+    rester_http:wpost(Url1,
 		      [{'Content-Type', "application/json"}],
 		      Args1),
-    send_commands(Url, Options);
-send_commands(Url, [_|Options]) ->
-    send_commands(Url, Options);
-send_commands(Url, []) ->
+    send_argl(Url, Options);
+send_argl(Url, [_|Options]) ->
+    send_argl(Url, Options);
+send_argl(Url, []) ->
     ok.
 
 usage() ->
@@ -43,11 +57,14 @@ usage() ->
 	      "   --digest          use digest authentication\n"
 	      "   --negotiate       use the method selected by server\n"
 	      "  <command>\n"
-	      "  pixel x=<coord> y=<coord> color=<color>\n"
-	      "  text x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> text=<string> color=<color>\n"
-	      "  image x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
-	      "  video x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
-	      "  rect x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
+	      "  draw_pixel x=<coord> y=<coord> color=<color>\n"
+	      "  draw_text x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> text=<string> color=<color>\n"
+	      "  draw_image x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
+	      "  draw_video x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
+	      "  draw_rect x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
+	      %% SVG
+	      "  text id=<id> x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> fill=<color> text=<string>\n"
+	      "  rect id=<id> x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
 	      "  clear x=<coord> y=<coord> width=<dim> height=<dim>\n"
 	     ).
 
@@ -94,121 +111,7 @@ get_url_(Options) ->
 get_vsn(Options) ->
     getopt("vsn", Options, ?BULLER_VSN).
 	
-process_args([]) ->
-    [];
-process_args(Args) ->
-    Options = parse_opts(Args),
-    case getbool("help", Options) of
-	true -> usage();
-	false ->
-	    case getbool("h", Options) of
-		true -> usage();
-		false -> group_commands(Options)
-	    end
-    end.
-
-group_commands(Options) ->
-    group_commands_(Options,[]).
-
-group_commands_([{arg,Command}|Options], Acc) ->
-    {Args, Options1} = collect_args(Options,[]),
-    group_commands_(Options1, [{command,Command,Args}|Acc]);
-group_commands_([Other|Options], Acc) ->
-    group_commands_(Options, [Other|Acc]);
-group_commands_([], Acc) ->
-    lists:reverse(Acc).
-
-collect_args([{arg,Name,Value}|Options], Args) ->
-    collect_args(Options, [{Name,Value}|Args]);
-collect_args(Options, Args) ->
-    {lists:reverse(Args), Options}.
-
-
-getopt(Name, Options) ->
-    getopt(Name, Options, undefined).
-
-getopt(Name, Options, Default) ->
-    case getopt_(Name, Options) of
-	{ok,Value} -> Value;
-	undefined -> Default
-    end.
-
-getbool(Name, Options) ->
-    case getopt_(Name, Options) of
-	undefined -> false;
-	{ok,false} -> false;
-	{ok,true} -> true
-    end.
-
-getopt_(Name, [{option,Name}|_]) -> {ok,true};
-getopt_(Name, [{option,Name,Value}|_]) -> {ok,Value};
-getopt_(Name, [_|Opts]) -> getopt_(Name, Opts);
-getopt_(_Name, []) -> undefined.
-
-parse_opts([]) ->
-    [];
-parse_opts(Args) ->
-    parse_opts_(Args,[]).
-
-parse_opts_(Args,Acc) ->
-    case parse_opt(Args) of
-	{A,[]} -> lists:reverse([A|Acc]);
-	{A,Args1} -> parse_opts_(Args1, [A|Acc])
-    end.
-
-parse_opt([[$-,$-|Opt] | Args]) ->
-    parse_arg(option, Opt, Args);
-parse_opt([Arg=[$-|Opt=[C|_]] | Args]) when ?is_digit(C) ->
-    try to_integer_(Arg, 0) of
-	Int -> {{arg,Int},Args}
-    catch
-	error:_ -> parse_arg(option,Opt,Args)
-    end;
-parse_opt([[$-|Opt] | Args]) ->
-    parse_arg(option, Opt, Args);
-parse_opt([Arg|Args]) ->
-    try to_integer_(Arg, 0) of
-	Int -> {{arg,Int},Args}
-    catch
-	error:_ -> 
-	    parse_arg(arg,Arg,Args)
-    end.
-
-parse_arg(Tag, Name, Args) ->
-    case string:split(Name, "=") of
-	[Name1] ->
-	    {{Tag,Name1},Args};
-	[Name1,[]] ->
-	    case Args of
-		[] -> {{Tag,Name1,""},Args};
-		[Arg=[$-,C|_]|Args1] when ?is_digit(C) ->
-		    try to_integer_(Arg, 0) of
-			Int -> {{Tag,Name1,Int},Args1}
-		    catch
-			error:_ -> {{Tag,Name1},Args}
-		    end;
-		[[$-|_]|_] -> {{Tag,Name1},Args};
-		[Arg=[C|_]|Args1] when ?is_digit(C)->
-		    try to_integer_(Arg, 0) of
-			Int -> {{Tag,Name1,Int},Args1}
-		    catch
-			error:_ -> {{Tag,Name1,Arg},Args1}
-		    end;
-		[Arg|Args1] ->
-		    {{Tag,Name1,Arg},Args1}
-	    end;
-	[Name1,Arg] ->
-	    try to_integer_(Arg, 0) of
-		Int -> {{Tag,Name1,Int},Args}
-	    catch
-		error:_ -> {{Tag,Name1,Arg},Args}
-	    end
-    end.
-
-to_integer_("0x"++Value,0) -> list_to_integer(Value, 16);
-to_integer_("-0x"++Value,0) -> -list_to_integer(Value, 16);
-to_integer_(Value,0) -> list_to_integer(Value, 10);
-to_integer_(Value,Base) -> list_to_integer(Value, Base).
+-include("../src/opts.hrl").
 
 to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
 to_list(Int) when is_integer(Int) -> integer_to_list(Int);

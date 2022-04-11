@@ -26,7 +26,7 @@ write_image(Url, Xd, Yd, Filename) ->
 		
 upload_pixel(Url, X, Y, ARGB) ->
     Data = [{x, X}, {y, Y}, {color, list_to_binary(argb_to_hex(ARGB))}],
-    rester_http:wpost(Url++"/pixel",
+    rester_http:wpost(Url++"/draw_pixel",
 		      [{'Content-Type', "application/json"}],
 		      Data).
 

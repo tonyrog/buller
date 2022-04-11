@@ -7,7 +7,7 @@
 
 -module(buller_serv).
 
--export([run/3]).
+-export([run/4]).
 
 -compile(export_all).
 
@@ -15,6 +15,7 @@
 	{
 	 ws,
 	 canvas,
+	 svg,
 	 ctx,
 	 screen_width,
 	 screen_height,
@@ -25,15 +26,18 @@
 	 window_width,
 	 window_height,
 	 canvas_width,
-	 canvas_height
+	 canvas_height,
+	 svg_width,
+	 svg_height
 	}).
 
 -define(rec_info(T,R),lists:zip(record_info(fields,T),tl(tuple_to_list(R)))).
+-define(SVG_NS, "http://www.w3.org/2000/svg").
 
-
-run(Server, Ws, Where) ->
+run(Server, Ws, CanvasID, SvgID) ->
     true = register(Server, self()),
-    Canvas = wse:id(Where),
+    Canvas = wse:id(CanvasID),
+    Svg = wse:id(SvgID),
     {ok,Ctx} = wse:call(Ws, Canvas, getContext, ["2d"]),
     {ok,CanvasWidth} = wse:get(Ws, Canvas, width),
     {ok,CanvasHeight} = wse:get(Ws, Canvas, height),
@@ -50,8 +54,12 @@ run(Server, Ws, Where) ->
     {ok,ScreenColorDepth} = wse:get(Ws, wse:id(screen), colorDepth),
     {ok,ScreenPixelDepth} = wse:get(Ws, wse:id(screen), pixelDepth),
 
+    {ok,SvgWidth} = wse:get(Ws, Svg, width),
+    {ok,SvgHeight} = wse:get(Ws, Svg, height),
+
     S = #s{ws=Ws, 
 	   canvas=Canvas, 
+	   svg=Svg, 
 	   ctx=Ctx,
 	   canvas_width=CanvasWidth, 
 	   canvas_height=CanvasHeight,
@@ -62,32 +70,34 @@ run(Server, Ws, Where) ->
 	   screen_avail_width=ScreenAvailWidth, 
 	   screen_avail_height=ScreenAvailHeight,
 	   screen_colorDepth=ScreenColorDepth,
-	   screen_pixelDepth=ScreenPixelDepth
+	   screen_pixelDepth=ScreenPixelDepth,
+	   svg_width=SvgWidth, 
+	   svg_height=SvgHeight
 	  },
     io:format("S = ~p\n", [?rec_info(s,S)]),
-    command_loop(S).
+    dispatch_loop(S).
 
-command_loop(S) ->
+dispatch_loop(S) ->
     receive
-	{cmd, From, CmdList} ->
-	    Result = command(S, CmdList),
+	{draw, From, CmdList} ->
+	    Result = draw(S, CmdList),
 	    reply(From, Result);
-	{rect, From, Arg} ->
-	    io:format("Rect: ~p\n", [Arg]),
+	{draw_rect, From, Arg} ->
+	    io:format("DrawRect: ~p\n", [Arg]),
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    Width = maps:get(width, Arg, 0),
 	    Height = maps:get(height, Arg, 0),
 	    Color = maps:get(color, Arg, "black"),
-	    Result = command(S, 
-			     [
-			      {fillStyle, [Color]},
-			      {fillRect,[X,Y,Width,Height]}
-			     ]),
+	    Result = draw(S, 
+			  [
+			   {fillStyle, [Color]},
+			   {fillRect,[X,Y,Width,Height]}
+			  ]),
 	    reply(From, Result),
-	    command_loop(S);
-	{text, From,  Arg} ->
-	    io:format("Text: ~p\n", [Arg]),
+	    dispatch_loop(S);
+	{draw_text, From,  Arg} ->
+	    io:format("DrawText: ~p\n", [Arg]),
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    FontSize = maps:get('font-size', Arg, 24),
@@ -100,86 +110,84 @@ command_loop(S) ->
 		   end,
 	    Text = maps:get(text, Arg, ""),
 	    Color = maps:get(color, Arg, "black"),
-	    Result = command(S,
-			     [
-			      {fillStyle,[Color]},
-			      {font, [Font]},
-			      {fillText,[Text,X,Y]}
-			     ]),
+	    Result = draw(S,
+			  [
+			   {fillStyle,[Color]},
+			   {font, [Font]},
+			   {fillText,[Text,X,Y]}
+			  ]),
 	    reply(From, Result),
-	    command_loop(S);
-	{clear, From, Arg} ->
+	    dispatch_loop(S);
+	{clear, From, Arg} -> %% clear canvas (bg)
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    Width = maps:get(width, Arg, S#s.canvas_width),
 	    Height = maps:get(height, Arg, S#s.canvas_height),
 	    Result = 
-		command(S, [
-			    {clearRect,[X,Y,Width,Height]}
-			   ]),
+		draw(S, [
+			 {clearRect,[X,Y,Width,Height]}
+			]),
 	    reply(From, Result),
-	    command_loop(S);
+	    dispatch_loop(S);
 
-	{image, From, Arg} ->
+	{draw_image, From, Arg} ->
 	    X = maps:get(x, Arg, undefined),
 	    Y = maps:get(y, Arg, undefined),
 	    if X =:= undefined; Y =:= undefined ->
 		    reply(From, {error, missing_pos}),
-		    command_loop(S);
+		    dispatch_loop(S);
 	       true ->
 		    case maps:get(src, Arg, undefined) of
 			undefined ->
 			    reply(From, {error, missing_src}),
-			    command_loop(S);
+			    dispatch_loop(S);
 			Src ->
 			    case wse:load_image(S#s.ws, Src) of
 				{ok, Img} ->
-				    Result = image_command(S, Img,
-							   X, Y, Arg),
+				    Result = draw_image(S, Img, X, Y, Arg),
 				    reply(From, Result),
-				    command_loop(S);
+				    dispatch_loop(S);
 				_Error ->
 				    reply(From, {error, image_error}),
-				    command_loop(S)
+				    dispatch_loop(S)
 			    end
 		    end
 	    end;
 
-	{video, From, Arg} ->
+	{draw_video, From, Arg} ->
 	    X = maps:get(x, Arg, undefined),
 	    Y = maps:get(y, Arg, undefined),
 	    Width = maps:get(width, Arg, undefined),
 	    Height = maps:get(height, Arg, undefined),
 	    if X =:= undefined; Y =:= undefined ->
 		    reply(From, {error, missing_pos}),
-		    command_loop(S);
+		    dispatch_loop(S);
 	       true ->
 		    case maps:get(src, Arg, undefined) of
 			undefined ->
 			    reply(From, {error, missing_src}),
-			    command_loop(S);
+			    dispatch_loop(S);
 			Src ->
 			    case wse:load_video(S#s.ws, Src, Width, Height) of
 				{ok, Vid} ->
-				    Result = image_command(S, Vid,
-							   X, Y, Arg),
+				    Result = draw_image(S, Vid, X, Y, Arg),
 				    reply(From, Result),
-				    command_loop(S);
+				    dispatch_loop(S);
 				_Error ->
 				    reply(From, {error, image_error}),
-				    command_loop(S)
+				    dispatch_loop(S)
 			    end
 		    end
 	    end;
 
-	{setpixel, From, Arg} ->
+	{draw_pixel, From, Arg} ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    C = maps:get(color,Arg,"#000000"),
 	    case lookup_rgba(C) of
 		false -> 
 		    reply(From, {error, color_error}),
-		    command_loop(S);
+		    dispatch_loop(S);
 		{R,G,B,A} ->
 		    %% io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
 		    {ok,ImageData} = wse:call(S#s.ws, S#s.ctx, getImageData,
@@ -191,10 +199,10 @@ command_loop(S) ->
 		    wse:set(S#s.ws, Data, 3, A),
 		    wse:call(S#s.ws, S#s.ctx, putImageData, [ImageData,X,Y]),
 		    reply(From, ok),
-		    command_loop(S)
+		    dispatch_loop(S)
 	    end;
 
-	{getpixel, From, Arg} ->
+	{get_pixel, From, Arg} ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),	    
 	    {ok,ImageData} = wse:call(S#s.ws, S#s.ctx, getImageData, [X,Y,1,1]),
@@ -210,30 +218,115 @@ command_loop(S) ->
 		tl(integer_to_list(16#100+B,16)) ++
 		tl(integer_to_list(16#100+A,16)),
 	    reply(From, Value),
-	    command_loop(S);
+	    dispatch_loop(S);
+
+	%% Svg - commands
+
+	{rect, From, Arg} ->
+	    io:format("Rect: ~p\n", [Arg]),
+	    Ws = S#s.ws,
+	    ID = get_id(Arg),
+	    Rect = wse:createElementNS(Ws,?SVG_NS,"rect"),
+	    Arg1 = delete_attributes([id], Arg),
+	    AVs0 = arg_to_attributes(Arg1),
+	    AVs = [{"id",ID}|AVs0],
+	    io:format("Rect: AVs=~p\n", [AVs]),
+	    set_attributes(Ws, Rect, AVs),  %% check result?
+	    wse:appendChild(Ws, S#s.svg, Rect),
+	    %% Update the SVG!
+	    %% Body = wse:getElementById(Ws, "bb"),
+	    %% wse:call(Ws, Body, replaceChild, [S#s.svg, S#s.svg]),
+	    reply(From, ok),
+	    dispatch_loop(S);
+
+	{text, From, Arg} ->
+	    io:format("Text: ~p\n", [Arg]),
+	    Ws = S#s.ws,
+	    ID = get_id(Arg),
+	    Data = maps:get(text, Arg, ""),
+	    Text = wse:createElementNS(Ws,?SVG_NS,"text"),
+	    Arg1 = delete_attributes([id, text], Arg),
+	    AVs0 = arg_to_attributes(Arg1),
+	    AVs  = [{id,ID}|AVs0],
+	    io:format("Text: AVs=~p\n", [AVs]),
+	    set_attributes(Ws, Text, AVs),  %% check result?
+	    TextNode = wse:createTextNode(Ws,Data),
+	    wse:appendChild(Ws, Text, TextNode),
+	    wse:appendChild(Ws, S#s.svg, Text),
+	    reply(From, ok),
+	    dispatch_loop(S);
 
 	{width, From, _Arg} ->
 	    reply(From, S#s.canvas_width),
-	    command_loop(S);
+	    dispatch_loop(S);
 
 	{height, From, _Arg} ->
 	    reply(From, S#s.canvas_height),
-	    command_loop(S);
+	    dispatch_loop(S);
 
 	{code_change, From, _Arg} ->
 	    reply(From, ok),
-	    ?MODULE:command_loop(S);
+	    ?MODULE:dispatch_loop(S);
 	    
 	Other ->
 	    io:format("got unknown command: ~p\n", [Other]),
-	    command_loop(S)
+	    dispatch_loop(S)
     end.
+
+delete_attributes([Attr|As], Arg) ->
+    Arg1 = delete_attribute(Attr, Arg),
+    delete_attributes(As, Arg1);
+delete_attributes([], Arg) ->
+    Arg.
+
+delete_attribute(Attr, Arg) when is_atom(Attr) ->
+    case maps:is_key(Attr, Arg) of
+	true -> maps:remove(Attr, Arg);
+	false ->
+	    Attr1 = atom_to_list(Attr),
+	    case maps:is_key(Attr1, Arg) of
+		true -> maps:remove(Attr1, Arg);
+		false -> Arg
+	    end
+    end;
+delete_attribute(Attr, Arg) when is_list(Attr) ->
+    case maps:is_key(Attr, Arg) of
+	true -> maps:remove(Attr, Arg);
+	false ->
+	    Attr1 = list_to_atom(Attr),
+	    case maps:is_key(Attr1, Arg) of
+		true -> maps:remove(Attr1, Arg);
+		false -> Arg
+	    end
+    end.
+
+
+arg_to_attributes(Arg) when is_map(Arg) ->
+    maps:to_list(Arg).
+
+set_attributes(Ws, Elem, AVs) ->
+    [ {Attr,wse:call(Ws, Elem, setAttribute, [Attr, Value])} ||
+	{Attr, Value} <- AVs].
+
+get_id(Arg) when is_map(Arg) ->
+    case maps:get(id, Arg, undefined) of
+	undefined -> next_id();
+	ID -> ID
+    end.
+
+next_id() ->
+    ID = case get(next_id) of
+	     undefined -> rand:uniform(16#ffff);
+	     NextID -> NextID
+	 end,
+    put(next_id, ID+1),
+    [$i|integer_to_list(ID)].
 
 %% src, img, x, y
 %% src, img, x, y, width, height
 %% src, img, sx, sy, swidth, sheight, x, y, width, height
 
-image_command(S = #s { ws = Ws }, Img, X, Y, Arg) ->
+draw_image(S = #s { ws = Ws }, Img, X, Y, Arg) ->
     {ok,IWidth} = wse:get(Ws, Img, width),
     {ok,IHeight} = wse:get(Ws, Img, height),
     
@@ -248,47 +341,47 @@ image_command(S = #s { ws = Ws }, Img, X, Y, Arg) ->
     if 
 	Sx =/= undefined, Sy =/= undefined;
 	Swidth =/= undefined, Sy =/= undefined ->  %% clip
-	    command(S,
-		    [
-		     {drawImage,
-		      [Img,X,Y,
-		       ifundef(Width,IWidth),
-		       ifundef(Height,IHeight),
-		       ifundef(Sx, X),
-		       ifundef(Sy, Y),
-		       ifundef(Swidth, Width),
-		       ifundef(Sheight, Height)
-		      ]}
-		    ]);
+	    draw(S,
+		 [
+		  {drawImage,
+		   [Img,X,Y,
+		    ifundef(Width,IWidth),
+		    ifundef(Height,IHeight),
+		    ifundef(Sx, X),
+		    ifundef(Sy, Y),
+		    ifundef(Swidth, Width),
+		    ifundef(Sheight, Height)
+		   ]}
+		 ]);
 	Width =/= undefined, Height =/= undefined ->
-	    command(S,
-		    [
-		     {drawImage,[Img,X,Y,Width,Height]}
-		    ]);
+	    draw(S,
+		 [
+		  {drawImage,[Img,X,Y,Width,Height]}
+		 ]);
 	true ->
-	    command(S,
-		    [
-		     {drawImage,[Img,X,Y]}
-		    ])
+	    draw(S,
+		 [
+		  {drawImage,[Img,X,Y]}
+		 ])
     end.
 
 
-command(S, [Command={Cmd,Args=[Arg]}|CmdList]) ->
+draw(S, [Command={Cmd,Args=[Arg]}|CmdList]) ->
     case property_type(Cmd, Args) of
 	undefined ->
 	    io:format("Command ~p\n", [Command]),
 	    wse:call(S#s.ws, S#s.ctx, Cmd, Args),
-	    command(S, CmdList);
+	    draw(S, CmdList);
 	_Type ->    
 	    io:format("Set ~p = ~p\n", [Cmd, Arg]),
 	    wse:set(S#s.ws, S#s.ctx, Cmd, Arg),
-	    command(S, CmdList)
+	    draw(S, CmdList)
     end;
-command(S, [Command={Cmd,Args}|CmdList]) ->
+draw(S, [Command={Cmd,Args}|CmdList]) ->
     io:format("Command ~p\n", [Command]),
     wse:call(S#s.ws, S#s.ctx, Cmd, Args),
-    command(S, CmdList);
-command(_S, []) ->
+    draw(S, CmdList);
+draw(_S, []) ->
     ok.
 
 reply({Pid,Ref}, Reply) ->

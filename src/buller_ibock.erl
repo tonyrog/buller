@@ -65,6 +65,32 @@ handle_http_request(Socket, Request, Body, XArgs) ->
 handle_http_post(_Socket, Request, Body, _XArgs) ->
     Url = Request#http_request.uri,
     case string:tokens(Url#url.path, "/") of
+        ["v1","draw_text"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:draw_text(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","draw_rect"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:draw_rect(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","draw_image"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:draw_image(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","draw_video"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:draw_video(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+	["v1","draw_pixel"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:draw_pixel(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+	%% SVG commands
         ["v1","text"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:text(Args),
@@ -75,26 +101,14 @@ handle_http_post(_Socket, Request, Body, _XArgs) ->
 	    buller:rect(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-        ["v1","image"] ->
-	    Args = parse_json_body(Request, Body),
-	    buller:image(Args),
-	    {200, "OK",
-	     [{content_type, "text/plain"}]};
-        ["v1","video"] ->
-	    Args = parse_json_body(Request, Body),
-	    buller:video(Args),
-	    {200, "OK",
-	     [{content_type, "text/plain"}]};
-	["v1","pixel"] ->
-	    Args = parse_json_body(Request, Body),
-	    buller:setpixel(Args),
-	    {200, "OK",
-	     [{content_type, "text/plain"}]};
+	%% general
         ["v1","clear"] ->
 	    %% Args = parse_json_body(Request, Body),
 	    buller:clear(),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
+
+
         _Tokens ->
             501
     end.

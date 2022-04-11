@@ -7,7 +7,7 @@
 
 window.onload = function() {
    if (Wse.open("ws://"+(location.hostname||"localhost")+":1234/websession")) {
-      Wse.start('buller', 'run', ["board"]);
+       Wse.start('buller', 'run', ["buller_bg", "buller_fg"]);
    }
    else
      alert("WebSockets not supported");
@@ -15,7 +15,8 @@ window.onload = function() {
 
 </script>
 </head>
-<body>
-<canvas id="board" width=1024 height=768></canvas>
+<body id="bb">
+  <canvas id="buller_bg" width=1024 height=768 style="position:absolute;top=0px;left=0px;z-index:1"></canvas>
+  <svg id="buller_fg" width=1024 height=768 style="position:absolute;top=0px;left=0px;z-index:2"></svg>
 </body>
 </html>

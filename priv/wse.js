@@ -107,6 +107,7 @@ function WseClass(enable_console) {
     this.FunctionTag = Ei.atom("function");
     this.ReplyTag    = Ei.atom("reply");
     this.NoReplyTag  = Ei.atom("noreply");
+    this.debug       = false;
 
     this.dummyConsole = {  
 	assert : function(){},  
@@ -117,8 +118,10 @@ function WseClass(enable_console) {
 	dir : function(){},  
 	info : function(){}
     };
-    if (enable_console && (window.console !== undefined))
+    if (enable_console && (window.console !== undefined)) {
+	this.debug = true;
 	this.console = window.console;
+    }
     else
 	this.console = this.dummyConsole;
 };
@@ -186,7 +189,8 @@ WseClass.prototype.decode_js = function(Data) {
 		return obj;
 	    }
 	    else {
-		this.console.debug("unable to decode pair " + Data);
+		if (this.debug)
+		    this.console.debug("unable to decode pair " + Data);
 		return null;
 	    }
 	}
@@ -198,12 +202,14 @@ WseClass.prototype.decode_js = function(Data) {
 		return arr
 	}
 	else {
-	    this.console.debug("unable to decode object " + Data);
+	    if (this.debug)
+		this.console.debug("unable to decode object " + Data);
 	    return null;
 	}
 	break;
     default:
-	this.console.debug("unable to decode data " + Data);
+	if (this.debug)
+	    this.console.debug("unable to decode data " + Data);
 	return null;
     }
 };
@@ -261,17 +267,20 @@ WseClass.prototype.remove_children = function(Cell) {
 
 WseClass.prototype.lookup_object = function(index) {
     var obj = this.objects[index];
-    this.console.debug("lookup object "+index+" = "+obj);
+    if (this.debug)
+	this.console.debug("lookup object "+index+" = "+obj);
     return obj;
 }
 
 WseClass.prototype.insert_object = function(index,obj) {
-    this.console.debug("insert object "+index+" = "+obj);
+    if (this.debug)
+	this.console.debug("insert object "+index+" = "+obj);
     this.objects[index] = obj;
 }
 
 WseClass.prototype.delete_object = function(index) {
-    this.console.debug("deleting object "+index);
+    if (this.debug)
+	this.console.debug("deleting object "+index);
     delete this.objects[index];
 }
 
@@ -375,7 +384,8 @@ WseClass.prototype.decode_value = function(Obj) {
 	}
 	return undefined;
     default:
-	this.console.debug("unhandled object "+ Obj);
+	if (this.debug)
+	    this.console.debug("unhandled object "+ Obj);
 	return Obj;
     }
 };
@@ -469,7 +479,8 @@ WseClass.prototype.dispatch = function (Request) {
 	    fn = this.reply_fun[iref];
 	    obj = this.reply_obj[iref];
 	    ref = this.reply_ref[iref];
-	    this.console.debug("got reply "+iref+","+value+" fn="+fn+" obj="+obj+" ref="+ref);
+	    if (this.debug)
+		this.console.debug("got reply "+iref+","+value+" fn="+fn+" obj="+obj+" ref="+ref);
 	    if (fn != undefined) {
 		delete this.reply_fun[iref];
 		delete this.reply_obj[iref];
@@ -525,10 +536,12 @@ WseClass.prototype.dispatch = function (Request) {
 	    }
 	}
 	else if ((argv.length == 3) && Ei.eqAtom(argv[0],"newf")) {
-	    this.console.debug("new Function("+argv[1]+","+argv[2]+")");
+	    if (this.debug)
+		this.console.debug("new Function("+argv[1]+","+argv[2]+")");
 	    try {
 		var fn = new Function(argv[1],argv[2]);
-		this.console.debug("function = "+fn);
+		if (this.debug)
+		    this.console.debug("function = "+fn);
 		rvalue = this.encode_value(fn);
 		value = rvalue;
 	    }
@@ -545,10 +558,12 @@ WseClass.prototype.dispatch = function (Request) {
 	    try {
 		val = window[fn].apply(objb, args);
 		rvalue = this.encode_value(val);
-		this.console.debug("call/3=" + Ei.pp(argv[1]) + "," + Ei.pp(argv[2]) + "," + Ei.pp(argv[3]));
+		if (this.debug)
+		    this.console.debug("call/3=" + Ei.pp(argv[1]) + "," + Ei.pp(argv[2]) + "," + Ei.pp(argv[3]));
 		if (is_dsync && (fn === "call") && (val % 1 === 0)) {
 		    // val is a reference in this case
-		    this.console.debug("set reply_obj["+val+"] = "+objb);
+		    if (this.debug)		    
+			this.console.debug("set reply_obj["+val+"] = "+objb);
 		    objb.reply_obj[val] = this; // patch object
 		    objb.reply_ref[val] = aref; // original ref
 		}
@@ -565,16 +580,20 @@ WseClass.prototype.dispatch = function (Request) {
 	    var args = this.decode_value(argv[4]);
 	    var val;
 
-	    this.console.debug("obja = " + obja);
-	    this.console.debug("meth = " + meth);
+	    if (this.debug) {	    
+		this.console.debug("obja = " + obja);
+		this.console.debug("meth = " + meth);
+	    }
 
 	    try {
 		val  = (obja[meth]).apply(objb, args);
 		rvalue = this.encode_value(val);
-		this.console.debug("call/4=" + Ei.pp(argv[1]) + "," + Ei.pp(argv[2]) + "," + Ei.pp(argv[3]) + "," + Ei.pp(argv[4]));
+		if (this.debug)
+		    this.console.debug("call/4=" + Ei.pp(argv[1]) + "," + Ei.pp(argv[2]) + "," + Ei.pp(argv[3]) + "," + Ei.pp(argv[4]));
 		if (is_dsync && (meth === "call") && (val % 1 === 0)) {
 		    // val is a reference in this case
-		    this.console.debug("set obja.reply_obj["+val+"] = "+this);
+		    if (this.debug)
+			this.console.debug("set obja.reply_obj["+val+"] = "+this);
 		    obja.reply_obj[val] = this; // patch object
 		    obja.reply_ref[val] = aref; // original ref
 		}
@@ -589,7 +608,8 @@ WseClass.prototype.dispatch = function (Request) {
 	    var attr  = this.decode_value(argv[2]);
 	    try {
 		rvalue = obj[attr]; // both array and object attribute!
-		this.console.debug(argv[1]+".get: "+attr+"="+rvalue);
+		if (this.debug)
+		    this.console.debug(argv[1]+".get: "+attr+"="+rvalue);
 		value = Ei.tuple(this.OkTag, this.encode_value(rvalue));
 	    }
 	    catch (err) {
@@ -600,7 +620,8 @@ WseClass.prototype.dispatch = function (Request) {
 	    var obj   = this.decode_value(argv[1]);
 	    var attr  = this.decode_value(argv[2]);
 	    rvalue = this.decode_value(argv[3]);
-	    this.console.debug(argv[1]+".set: "+attr+"="+argv[3]+"("+rvalue+")");
+	    if (this.debug)
+		this.console.debug(argv[1]+".set: "+attr+"="+argv[3]+"("+rvalue+")");
 	    try {
 		obj[attr] = rvalue;  // both array and object attribute!
 		value = this.OkTag;
@@ -617,7 +638,6 @@ WseClass.prototype.dispatch = function (Request) {
 	}
     }
     if (iref == 0) {
-	// this.console.debug("ival=0");
 	return undefined;
     }
     else if (iref > 0) {
@@ -629,7 +649,6 @@ WseClass.prototype.dispatch = function (Request) {
     else {
 	t = Ei.tuple(this.NoReplyTag,-iref);
     }
-    // this.console.debug("t = " + Ei.pp(t));
     return t;
 };
 
@@ -663,11 +682,13 @@ WseClass.prototype.call = function (mod,fun,args,onreply) {
     var ref = this.iref++;
     var cmd = Ei.tuple(Ei.atom("call"),ref,Ei.atom(mod),Ei.atom(fun),args);
 
-    this.console.debug("call mod="+mod+", fun="+fun+", args="+args);
+    if (this.debug)    
+	this.console.debug("call mod="+mod+", fun="+fun+", args="+args);
     this.reply_fun[ref] = onreply;
     this.reply_obj[ref] = this;
     this.reply_ref[ref] = ref;
-    this.console.debug("set reply_fun["+ref+"] = "+onreply);
+    if (this.debug)    
+	this.console.debug("set reply_fun["+ref+"] = "+onreply);
     this.send_request(ref, cmd);
     return ref;
 };
@@ -675,7 +696,8 @@ WseClass.prototype.call = function (mod,fun,args,onreply) {
 // Used for handle return relay
 WseClass.prototype.reply = function (iref,value) {
     var reply = Ei.tuple(this.ReplyTag,iref,value);
-    this.console.debug("sending reply "+reply+"id="+this.id);
+    if (this.debug)
+	this.console.debug("sending reply "+reply+"id="+this.id);
     if (this.state == "open") {
 	this.ws.send(this.encode(reply));
 	return true;
@@ -688,7 +710,8 @@ WseClass.prototype.reply = function (iref,value) {
 WseClass.prototype.cast = function (mod,fun,args) {
     var ref = this.iref++;
     var cmd = Ei.tuple(Ei.atom("cast"),ref,Ei.atom(mod),Ei.atom(fun),args);
-    this.console.debug("cast mod="+mod+", fun="+fun+", args="+args);
+    if (this.debug)    
+	this.console.debug("cast mod="+mod+", fun="+fun+", args="+args);
     this.send_request(ref, cmd);
     return true;
 };
@@ -698,7 +721,8 @@ WseClass.prototype.cast = function (mod,fun,args) {
 //
 WseClass.prototype.notify = function (ref,data) {
     var cmd = Ei.tuple(Ei.atom("notify"),ref,data);
-    this.console.debug("notify "+ ref + ", data="+data);
+    if (this.debug)
+	this.console.debug("notify "+ ref + ", data="+data);
     this.send_request(ref, cmd);
     return true;
 };
@@ -711,7 +735,8 @@ WseClass.prototype.notify = function (ref,data) {
 WseClass.prototype.register = function (name) {
     var ref = this.iref++;
     var cmd = Ei.tuple(Ei.atom("register"),Ei.atom(name));
-    this.console.debug("register "+ name);
+    if (this.debug)
+	this.console.debug("register "+ name);
     this.send_request(ref, cmd);
     return true;
 }
@@ -720,7 +745,8 @@ WseClass.prototype.register = function (name) {
 WseClass.prototype.unregister = function () {
     var ref = this.iref++;
     var cmd = Ei.tuple(Ei.atom("unregister"));
-    this.console.debug("unregister");
+    if (this.debug)
+	this.console.debug("unregister");
     this.send_request(ref, cmd);
     return true;
 }
