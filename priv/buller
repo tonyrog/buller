@@ -36,9 +36,10 @@ send_argl(Url, [{argl,Name,Args}|Options]) ->
     Args1 = [{list_to_atom(Key),Value} || {Key,Value} <- Args],
     Url1 = Url++"/"++Name,
     io:format("Post: ~s [~p]\n", [Url1, Args1]),
-    rester_http:wpost(Url1,
-		      [{'Content-Type', "application/json"}],
-		      Args1),
+    Res = rester_http:wpost(Url1,
+			    [{'Content-Type', "application/json"}],
+			    Args1),
+    io:format("Res: ~p\n", [Res]),
     send_argl(Url, Options);
 send_argl(Url, [_|Options]) ->
     send_argl(Url, Options);
@@ -57,15 +58,23 @@ usage() ->
 	      "   --digest          use digest authentication\n"
 	      "   --negotiate       use the method selected by server\n"
 	      "  <command>\n"
-	      "  draw_pixel x=<coord> y=<coord> color=<color>\n"
-	      "  draw_text x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> text=<string> color=<color>\n"
-	      "  draw_image x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
-	      "  draw_video x=<coord> y=<coord> width=<dim> height=<dim> sx=<coord> sy=<coord> swidth=<dim> sheight=<dim> src=<url>\n"
-	      "  draw_rect x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
+	      "  draw_pixel x,y,color\n"
+	      "  draw_text x,y,font-size,font-name,font,text,color\n"
+	      "  draw_image x,y,width,height,sx,sy,swidth,sheight,src\n"
+	      "  draw_video x,y,width,height,sx,sy,swidth,sheight,src\n"
+	      "  draw_rect x,y,width,height,color\n"
+	      "  clear x,y,width,height\n"
 	      %% SVG
-	      "  text id=<id> x=<coord> y=<coord> font-size=<dim> font-name=<string> font=<css-name> fill=<color> text=<string>\n"
-	      "  rect id=<id> x=<coord> y=<coord> width=<dim> height=<dim> color=<color>\n"
-	      "  clear x=<coord> y=<coord> width=<dim> height=<dim>\n"
+	      "  rect x,y,width,height,...\n"
+	      "  circle cx,cy,r,...\n"
+	      "  ellipse cx,cy,rx,ry,...\n"
+	      "  line x1,y1,x2,y2,...\n"
+	      "  polygon points,...\n"
+	      "  polyline points,...\n"
+	      "  path d,...\n"
+	      "  text x,y,font-size,font-name,font,text=<string>\n"
+	      "  set id,...\n"
+	      "  remove id,...\n"
 	     ).
 
 if_debug(Options, Fun) ->

@@ -37,7 +37,8 @@
 run(Server, Ws, CanvasID, SvgID) ->
     true = register(Server, self()),
     Canvas = wse:id(CanvasID),
-    Svg = wse:id(SvgID),
+    {ok,Svg} = wse:getElementById(Ws, SvgID),
+    %% Svg = wse:id(SvgID),
     {ok,Ctx} = wse:call(Ws, Canvas, getContext, ["2d"]),
     {ok,CanvasWidth} = wse:get(Ws, Canvas, width),
     {ok,CanvasHeight} = wse:get(Ws, Canvas, height),
@@ -54,8 +55,9 @@ run(Server, Ws, CanvasID, SvgID) ->
     {ok,ScreenColorDepth} = wse:get(Ws, wse:id(screen), colorDepth),
     {ok,ScreenPixelDepth} = wse:get(Ws, wse:id(screen), pixelDepth),
 
-    {ok,SvgWidth} = wse:get(Ws, Svg, width),
-    {ok,SvgHeight} = wse:get(Ws, Svg, height),
+    %% FIXME! getAttribute always return string!
+    {ok,SvgWidth} = wse:getAttribute(Ws, Svg, width),
+    {ok,SvgHeight} = wse:getAttribute(Ws, Svg, height),
 
     S = #s{ws=Ws, 
 	   canvas=Canvas, 
@@ -79,25 +81,36 @@ run(Server, Ws, CanvasID, SvgID) ->
 
 dispatch_loop(S) ->
     receive
-	{draw, From, CmdList} ->
-	    Result = draw(S, CmdList),
-	    reply(From, Result);
-	{draw_rect, From, Arg} ->
-	    io:format("DrawRect: ~p\n", [Arg]),
+	{code_change, From, _Arg} ->
+	    reply(From, ok),
+	    ?MODULE:dispatch_loop(S);
+	{Command, From, Arg} ->
+	    io:format("Command: ~p Arg=~p\n", [Command, Arg]),
+	    Result = dispatch(S, Command, Arg),
+	    reply(From, Result),
+	    ?MODULE:dispatch_loop(S);  %% only at code change
+	_Other ->
+	    io:format("got unknown command: ~p\n", [_Other]),
+	    ?MODULE:dispatch_loop(S)
+    end.
+	
+
+dispatch(S, Command, Arg) ->
+    case Command of
+	draw ->
+	    draw(S, Arg);
+	draw_rect ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    Width = maps:get(width, Arg, 0),
 	    Height = maps:get(height, Arg, 0),
 	    Color = maps:get(color, Arg, "black"),
-	    Result = draw(S, 
-			  [
-			   {fillStyle, [Color]},
-			   {fillRect,[X,Y,Width,Height]}
-			  ]),
-	    reply(From, Result),
-	    dispatch_loop(S);
-	{draw_text, From,  Arg} ->
-	    io:format("DrawText: ~p\n", [Arg]),
+	    draw(S, 
+		 [
+		  {fillStyle, [Color]},
+		  {fillRect,[X,Y,Width,Height]}
+		 ]);
+	draw_text ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    FontSize = maps:get('font-size', Arg, 24),
@@ -110,84 +123,64 @@ dispatch_loop(S) ->
 		   end,
 	    Text = maps:get(text, Arg, ""),
 	    Color = maps:get(color, Arg, "black"),
-	    Result = draw(S,
-			  [
-			   {fillStyle,[Color]},
-			   {font, [Font]},
-			   {fillText,[Text,X,Y]}
-			  ]),
-	    reply(From, Result),
-	    dispatch_loop(S);
-	{clear, From, Arg} -> %% clear canvas (bg)
-	    X = maps:get(x, Arg, 0),
-	    Y = maps:get(y, Arg, 0),
-	    Width = maps:get(width, Arg, S#s.canvas_width),
-	    Height = maps:get(height, Arg, S#s.canvas_height),
-	    Result = 
-		draw(S, [
-			 {clearRect,[X,Y,Width,Height]}
-			]),
-	    reply(From, Result),
-	    dispatch_loop(S);
+	    draw(S,
+		 [
+		  {fillStyle,[Color]},
+		  {font, [Font]},
+		  {fillText,[Text,X,Y]}
+		 ]);
 
-	{draw_image, From, Arg} ->
+	draw_image ->
 	    X = maps:get(x, Arg, undefined),
 	    Y = maps:get(y, Arg, undefined),
 	    if X =:= undefined; Y =:= undefined ->
-		    reply(From, {error, missing_pos}),
-		    dispatch_loop(S);
+		    {error, missing_pos};
 	       true ->
 		    case maps:get(src, Arg, undefined) of
 			undefined ->
-			    reply(From, {error, missing_src}),
-			    dispatch_loop(S);
+			    {error, missing_src};
 			Src ->
 			    case wse:load_image(S#s.ws, Src) of
 				{ok, Img} ->
-				    Result = draw_image(S, Img, X, Y, Arg),
-				    reply(From, Result),
-				    dispatch_loop(S);
+				    Res = draw_image(S, Img, X, Y, Arg),
+				    wse:remove(S#s.ws, Img),
+				    Res;
 				_Error ->
-				    reply(From, {error, image_error}),
-				    dispatch_loop(S)
+				    {error, image_error}
 			    end
 		    end
 	    end;
 
-	{draw_video, From, Arg} ->
+	draw_video ->
 	    X = maps:get(x, Arg, undefined),
 	    Y = maps:get(y, Arg, undefined),
 	    Width = maps:get(width, Arg, undefined),
 	    Height = maps:get(height, Arg, undefined),
 	    if X =:= undefined; Y =:= undefined ->
-		    reply(From, {error, missing_pos}),
-		    dispatch_loop(S);
+		    {error, missing_pos};
 	       true ->
 		    case maps:get(src, Arg, undefined) of
 			undefined ->
-			    reply(From, {error, missing_src}),
-			    dispatch_loop(S);
+			    {error, missing_src};
 			Src ->
 			    case wse:load_video(S#s.ws, Src, Width, Height) of
 				{ok, Vid} ->
-				    Result = draw_image(S, Vid, X, Y, Arg),
-				    reply(From, Result),
-				    dispatch_loop(S);
+				    R = draw_image(S, Vid, X, Y, Arg),
+				    wse:remove(S#s.ws, Vid),
+				    R;
 				_Error ->
-				    reply(From, {error, image_error}),
-				    dispatch_loop(S)
+				    {error, image_error}
 			    end
 		    end
 	    end;
 
-	{draw_pixel, From, Arg} ->
+	draw_pixel ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),
 	    C = maps:get(color,Arg,"#000000"),
 	    case lookup_rgba(C) of
 		false -> 
-		    reply(From, {error, color_error}),
-		    dispatch_loop(S);
+		    {error, color_error};
 		{R,G,B,A} ->
 		    %% io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
 		    {ok,ImageData} = wse:call(S#s.ws, S#s.ctx, getImageData,
@@ -198,11 +191,19 @@ dispatch_loop(S) ->
 		    wse:set(S#s.ws, Data, 2, B),
 		    wse:set(S#s.ws, Data, 3, A),
 		    wse:call(S#s.ws, S#s.ctx, putImageData, [ImageData,X,Y]),
-		    reply(From, ok),
-		    dispatch_loop(S)
+		    ok
 	    end;
 
-	{get_pixel, From, Arg} ->
+	clear -> %% clear canvas (bg)
+	    X = maps:get(x, Arg, 0),
+	    Y = maps:get(y, Arg, 0),
+	    Width = maps:get(width, Arg, S#s.canvas_width),
+	    Height = maps:get(height, Arg, S#s.canvas_height),
+	    draw(S, [
+		     {clearRect,[X,Y,Width,Height]}
+		    ]);
+
+	get_pixel ->
 	    X = maps:get(x, Arg, 0),
 	    Y = maps:get(y, Arg, 0),	    
 	    {ok,ImageData} = wse:call(S#s.ws, S#s.ctx, getImageData, [X,Y,1,1]),
@@ -212,66 +213,130 @@ dispatch_loop(S) ->
 	    {ok,B} = wse:get(S#s.ws, Data, 2),
 	    {ok,A} = wse:get(S#s.ws, Data, 3),
 	    %% io:format("R=~w, G=~w, B=~w, A=~w\n", [R,G,B,A]),
-	    Value = "#" ++ 
+	    "#" ++ 
 		tl(integer_to_list(16#100+R,16)) ++
 		tl(integer_to_list(16#100+G,16)) ++
 		tl(integer_to_list(16#100+B,16)) ++
-		tl(integer_to_list(16#100+A,16)),
-	    reply(From, Value),
-	    dispatch_loop(S);
+		tl(integer_to_list(16#100+A,16));
 
 	%% Svg - commands
 
-	{rect, From, Arg} ->
-	    io:format("Rect: ~p\n", [Arg]),
-	    Ws = S#s.ws,
-	    ID = get_id(Arg),
-	    Rect = wse:createElementNS(Ws,?SVG_NS,"rect"),
-	    Arg1 = delete_attributes([id], Arg),
-	    AVs0 = arg_to_attributes(Arg1),
-	    AVs = [{"id",ID}|AVs0],
-	    io:format("Rect: AVs=~p\n", [AVs]),
-	    set_attributes(Ws, Rect, AVs),  %% check result?
-	    wse:appendChild(Ws, S#s.svg, Rect),
-	    %% Update the SVG!
-	    %% Body = wse:getElementById(Ws, "bb"),
-	    %% wse:call(Ws, Body, replaceChild, [S#s.svg, S#s.svg]),
-	    reply(From, ok),
-	    dispatch_loop(S);
+	rect ->
+	    Elem = create_svg_element(S, "rect", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
 
-	{text, From, Arg} ->
-	    io:format("Text: ~p\n", [Arg]),
-	    Ws = S#s.ws,
-	    ID = get_id(Arg),
+	circle ->
+	    %% args: cx,cy,r
+	    Elem = create_svg_element(S, "circle", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+
+	ellipse ->
+	    %% args: cx,cy,rx,ry 
+	    Elem = create_svg_element(S, "ellipse", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+
+	line ->
+	    %% x1,y1,x2,y2
+	    Elem = create_svg_element(S, "line", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+
+	polygon ->
+	    %% points=x1,y1, x2,y2 ... xn,yn
+	    Elem = create_svg_element(S, "polygon", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+
+	polyline ->
+	    %% points=x1,y1, x2,y2 ... xn,yn
+	    Elem = create_svg_element(S, "polyline", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+
+	path ->
+	    %% d=<commands> M,L,H,V,C,S,Q,T,A,Z
+	    Elem = create_svg_element(S, "path", Arg),
+	    wse:appendChild(S#s.ws, S#s.svg, Elem),
+	    ok;
+	
+	text ->
+	    %% FIXME: tspan when multi line
 	    Data = maps:get(text, Arg, ""),
-	    Text = wse:createElementNS(Ws,?SVG_NS,"text"),
-	    Arg1 = delete_attributes([id, text], Arg),
-	    AVs0 = arg_to_attributes(Arg1),
-	    AVs  = [{id,ID}|AVs0],
-	    io:format("Text: AVs=~p\n", [AVs]),
-	    set_attributes(Ws, Text, AVs),  %% check result?
-	    TextNode = wse:createTextNode(Ws,Data),
-	    wse:appendChild(Ws, Text, TextNode),
-	    wse:appendChild(Ws, S#s.svg, Text),
-	    reply(From, ok),
-	    dispatch_loop(S);
+	    Arg1 = delete_attributes([text], Arg),
+	    Text = create_svg_element(S, "text", Arg1),
+	    TextNode = wse:createTextNode(S#s.ws,Data),
+	    wse:appendChild(S#s.ws, Text, TextNode),
+	    wse:appendChild(S#s.ws, S#s.svg, Text),
+	    ok;
 
-	{width, From, _Arg} ->
-	    reply(From, S#s.canvas_width),
-	    dispatch_loop(S);
+	set ->
+	    case get_value(id, Arg, undefined) of
+		undefined ->
+		    {error, missing_id};
+		ID ->
+		    Arg1 = delete_attributes([id], Arg),
+		    %% FIXME: update child nodes when requested
+		    AVs = arg_to_attributes(Arg1, translation_map()),
+		    case wse:getElementById(S#s.ws, ID) of
+			{ok,Elem} ->
+			    set_attributes(S#s.ws, Elem, AVs),
+			    ok;
+			_Error  ->
+			    {error, element_not_found}
+		    end
+	    end;
 
-	{height, From, _Arg} ->
-	    reply(From, S#s.canvas_height),
-	    dispatch_loop(S);
+	remove ->
+	    case get_value(id, Arg, undefined) of
+		undefined ->
+		    {error, missing_id};
+		ID ->
+		    case wse:getElementById(S#s.ws, ID) of
+			{ok,Elem} ->
+			    io:format("remove element = ~p\n", [Elem]),
+			    wse:remove(S#s.ws, Elem),
+			    ok;
+			_Error  ->
+			    {error, element_not_found}
+		    end
+	    end;
+				 
+	width ->
+	    S#s.canvas_width;
 
-	{code_change, From, _Arg} ->
-	    reply(From, ok),
-	    ?MODULE:dispatch_loop(S);
-	    
-	Other ->
-	    io:format("got unknown command: ~p\n", [Other]),
-	    dispatch_loop(S)
+	height ->
+	    S#s.canvas_height;
+	
+	_ ->
+	    {error, unknown_command}
     end.
+
+%% Create element and set all attributes, generate id if needed
+%% translate args color => fill
+%%                border-color => stroke
+%%                border-width => stroke-width
+create_svg_element(S, Type, Arg) ->
+    io:format("create_cvg_element: ~p\n", [Type]),    
+    Ws = S#s.ws,
+    ID = get_id(Arg),
+    Elem = wse:createElementNS(Ws,?SVG_NS,Type),
+    Arg1 = delete_attributes([id], Arg),
+    AVs0 = arg_to_attributes(Arg1, translation_map()),
+    AVs = [{id,ID}|AVs0],
+    io:format("~s args: AVs=~p\n", [Type, AVs]),
+    set_attributes(Ws, Elem, AVs),  %% check result?
+    Elem.
+
+%% some "virtual" attributes
+translation_map() ->
+    #{ color=>fill,
+       'border-color' => stroke,
+       'border-width' => 'stroke-width'
+     }.
+
 
 delete_attributes([Attr|As], Arg) ->
     Arg1 = delete_attribute(Attr, Arg),
@@ -300,13 +365,42 @@ delete_attribute(Attr, Arg) when is_list(Attr) ->
 	    end
     end.
 
-
 arg_to_attributes(Arg) when is_map(Arg) ->
     maps:to_list(Arg).
 
+%% convert arg (map) into key value list while translateing keys
+arg_to_attributes(Arg, Tr) when is_map(Arg), is_map(Tr) ->
+    [tr_(AV, Tr) || AV <- maps:to_list(Arg)].
+
+%% translate attibute names
+%% keys in Tr are always atoms, but K may be both atom or string
+tr_(KV={K,V}, Tr) ->
+    case maps:is_key(K, Tr) of
+	true -> {maps:get(K, Tr), V};
+	false when is_list(K) ->
+	    K1 = list_to_atom(K),
+	    case maps:is_key(K1, Tr) of
+		true -> {maps:get(K1, Tr), V};
+		false -> KV
+	    end;
+	_ -> KV
+    end.
+
 set_attributes(Ws, Elem, AVs) ->
-    [ {Attr,wse:call(Ws, Elem, setAttribute, [Attr, Value])} ||
+    [ {Attr,wse:setAttribute(Ws, Elem, Attr, Value)} ||
 	{Attr, Value} <- AVs].
+
+get_value(Attr, Arg) ->
+    get_value(Attr, Arg, undefined).
+
+get_value(Attr, Arg, Default) ->
+    case maps:get(id, Arg, undefined) of
+	undefined when is_atom(Attr) ->
+	    maps:get(atom_to_list(Attr), Arg, Default);
+	undefined when is_list(Attr) ->
+	    maps:get(list_to_atom(Attr), Arg, Default);
+	Value -> Value
+    end.
 
 get_id(Arg) when is_map(Arg) ->
     case maps:get(id, Arg, undefined) of

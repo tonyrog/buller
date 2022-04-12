@@ -22,7 +22,16 @@
 -export([get_pixel/1]).
 %% svg
 -export([rect/1]).
+-export([circle/1]).
+-export([ellipse/1]).
+-export([line/1]).
+-export([polygon/1]).
+-export([polyline/1]).
+-export([path/1]).
 -export([text/1]).
+-export([set/1]).
+-export([remove/1]).
+
 %% get
 -export([clear/0]).
 -export([width/0]).
@@ -56,11 +65,36 @@ draw_video(Args) ->
 draw_pixel(Args) ->
     call(draw_pixel, args(Args)).
 
+%% SVG
 rect(Args) ->
     call(rect, args(Args)).
 
+circle(Args) ->
+    call(circle, args(Args)).
+
+ellipse(Args) ->
+    call(ellipse, args(Args)).
+
+line(Args) ->
+    call(line, args(Args)).
+
+polygon(Args) ->
+    call(polygon, args(Args)).
+
+polyline(Args) ->
+    call(polyline, args(Args)).
+
+path(Args) ->
+    call(path, args(Args)).
+
 text(Args) ->
     call(text, args(Args)).
+
+set(Args) ->
+    call(set, args(Args)).
+
+remove(Args) ->
+    call(remove, args(Args)).
 
 get_pixel(Args) ->
     call(get_pixel, args(Args)).

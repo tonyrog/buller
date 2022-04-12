@@ -90,29 +90,66 @@ handle_http_post(_Socket, Request, Body, _XArgs) ->
 	    buller:draw_pixel(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-	%% SVG commands
-        ["v1","text"] ->
-	    Args = parse_json_body(Request, Body),
-	    buller:text(Args),
-	    {200, "OK",
-	     [{content_type, "text/plain"}]};
-        ["v1","rect"] ->
-	    Args = parse_json_body(Request, Body),
-	    buller:rect(Args),
-	    {200, "OK",
-	     [{content_type, "text/plain"}]};
-	%% general
+	%% clear canvas (background)
         ["v1","clear"] ->
 	    %% Args = parse_json_body(Request, Body),
 	    buller:clear(),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
-
-
+	%% SVG commands
+        ["v1","rect"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:rect(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","circle"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:circle(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","ellipse"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:ellipse(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","line"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:line(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","polygon"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:polygon(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","polyline"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:polyline(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","path"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:path(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","text"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:text(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","set"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:set(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","remove"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:remove(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
         _Tokens ->
             501
     end.
-
 
 handle_http_get(_Socket, #http_request{uri = Url}, _Body, _XArgs) ->
     case string:tokens(Url#url.path, "/") of
@@ -140,9 +177,6 @@ parse_json_body(Request, Body) ->
         JsonValue ->
             JsonValue
     end.
-
-
-
 
 handle_http_response(Socket, Request, {json, Status, JsonValue})
   when is_integer(Status) ->
