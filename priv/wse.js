@@ -297,7 +297,9 @@ WseClass.prototype.encode_value = function(Obj) {
 	// {object, document}  - the current document object
 	// {object, id}        - DOM object with id field
 	// {object, num}       - Stored in objects object!
-	if (Obj == window.self)
+	if (Obj == null)
+	    return Ei.atom("null");
+	else if (Obj == window.self)
 	    return Ei.tuple(this.ObjectTag,Ei.atom("window"));
 	else if (Obj == window.document) 
 	    return Ei.tuple(this.ObjectTag,Ei.atom("document"));

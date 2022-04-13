@@ -303,7 +303,14 @@ dispatch(S, Command, Arg) ->
 			    {error, element_not_found}
 		    end
 	    end;
-				 
+
+	remove_all ->
+	    remove_children(S, S#s.svg);
+
+	remove_all_and_clear ->
+	    remove_children(S, S#s.svg),
+	    clear_canvas(S);
+
 	width ->
 	    S#s.canvas_width;
 
@@ -314,6 +321,28 @@ dispatch(S, Command, Arg) ->
 	    {error, unknown_command}
     end.
 
+clear_canvas(S) ->
+    draw(S, [{clearRect,[0,0,
+			 S#s.canvas_width,
+			 S#s.canvas_height]}
+	    ]).
+
+%% possible remove all children with Element.replaceChildren();
+%% or loop
+remove_children(S, Element) ->
+    case wse:get(S#s.ws, Element, firstChild) of
+	{ok,null} ->
+	    io:format("firstChild = ~p\n", [null]),
+	    ok;
+	{ok,Child} ->
+	    io:format("firstChild = ~p\n", [Child]),
+	    wse:call(S#s.ws, Element, removeChild, [Child]),
+	    remove_children(S, Element);
+	Other ->
+	    io:format("firstChild = ~p\n",[Other]),
+	    {error, bad_child}
+    end.
+    
 %% Create element and set all attributes, generate id if needed
 %% translate args color => fill
 %%                border-color => stroke

@@ -20,6 +20,7 @@
 -export([draw_video/1]).
 -export([draw_pixel/1]).
 -export([get_pixel/1]).
+-export([clear/0]).
 %% svg
 -export([rect/1]).
 -export([circle/1]).
@@ -31,9 +32,10 @@
 -export([text/1]).
 -export([set/1]).
 -export([remove/1]).
-
+-export([remove_all/1]).
+-export([remove_all_and_clear/1]).
 %% get
--export([clear/0]).
+
 -export([width/0]).
 -export([height/0]).
 -export([code_change/0]).
@@ -95,6 +97,12 @@ set(Args) ->
 
 remove(Args) ->
     call(remove, args(Args)).
+
+remove_all(Args) ->
+    call(remove_all, args(Args)).
+
+remove_all_and_clear(Args) ->
+    call(remove_all_and_clear, args(Args)).
 
 get_pixel(Args) ->
     call(get_pixel, args(Args)).

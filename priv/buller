@@ -33,7 +33,7 @@ process_args(Args) ->
     end.
 
 send_argl(Url, [{argl,Name,Args}|Options]) ->
-    Args1 = [{list_to_atom(Key),Value} || {Key,Value} <- Args],
+    Args1 = [json_kv(KV) || KV <- Args],
     Url1 = Url++"/"++Name,
     io:format("Post: ~s [~p]\n", [Url1, Args1]),
     Res = rester_http:wpost(Url1,
@@ -43,9 +43,30 @@ send_argl(Url, [{argl,Name,Args}|Options]) ->
     send_argl(Url, Options);
 send_argl(Url, [_|Options]) ->
     send_argl(Url, Options);
-send_argl(Url, []) ->
+send_argl(_Url, []) ->
     ok.
 
+json_kv({K,V}) -> {json_key(K), json_value(V)}.
+
+json_key(X) when is_atom(X) -> X;
+json_key(X) when is_list(X) ->
+    try iolist_to_binary(X) of
+	String -> String
+    catch
+	error:_ -> X
+    end.
+
+json_value(X) when is_number(X) -> X;
+json_value(X) when is_binary(X) -> X;
+json_value(X) when is_atom(X) -> X;
+json_value(X) when is_boolean(X) -> X;
+json_value(List) when is_list(List) ->
+    try iolist_to_binary(List) of
+	String -> String
+    catch
+	error:_ -> List  %% fixme: adjust string values recursivly?
+    end.
+    
 usage() ->
     io:format("usage: buller [<options>] <command> ...\n"
 	      " OPTIONS\n"
@@ -75,8 +96,11 @@ usage() ->
 	      "  text x,y,font-size,font-name,font,text=<string>\n"
 	      "  set id,...\n"
 	      "  remove id,...\n"
+	      "  remove_all\n"
+	      "  remove_all_and_clear\n"
 	     ).
 
+-compile({nowarn_unused_function, {if_debug,2}}).
 if_debug(Options, Fun) ->
     case proplists:get_value(debug, Options, false) of
 	true ->
@@ -121,10 +145,3 @@ get_vsn(Options) ->
     getopt("vsn", Options, ?BULLER_VSN).
 	
 -include("../src/opts.hrl").
-
-to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
-to_list(Int) when is_integer(Int) -> integer_to_list(Int);
-to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom);
-to_list(Float) when is_integer(Float) -> io_lib:format("~.1f", [Float]);
-to_list(List) when is_list(List) -> List;
-to_list(Term) -> io_lib:format("~p", [Term]).

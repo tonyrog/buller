@@ -14,8 +14,8 @@
 
 -define(log(F,W,As),
 	io:format("~s:~w: " ++ (W)++" "++(F)++"\n", [?MODULE, ?LINE | (As)])).	
-%% -define(debug(F,As), ?log(F,"debug",As)).
--define(debug(F,A), ok).
+-define(debug(F,As), ?log(F,"debug",As)).
+%%-define(debug(F,A), ok).
 -define(info(F,As),  ?log(F,"info", As)).
 -define(warn(F,As),  ?log(F,"warn", As)).
 -define(error(F,As), ?log(F,"error", As)).
@@ -24,7 +24,7 @@
 -define(DEFAULT_IFADDR, any).
 
 start_link(Args0) ->
-    Args = Args0 ++ application:get_all_env(buller),    
+    Args = Args0 ++ application:get_all_env(buller),
     Port = proplists:get_value(port, Args, ?DEFAULT_PORT),
     IfAddr = proplists:get_value(ifaddr, Args, ?DEFAULT_IFADDR),
     ResterHttpArgs =
@@ -36,7 +36,6 @@ start_link(Args0) ->
          {nodelay, true},
          {reuseaddr, true}],
     rester_http_server:start_link(Port, ResterHttpArgs).
-
 
 handle_http_request(Socket, Request, Body, XArgs) ->
     ?debug("handle_http_request: ~s ~s ~p\n",
@@ -145,6 +144,16 @@ handle_http_post(_Socket, Request, Body, _XArgs) ->
         ["v1","remove"] ->
 	    Args = parse_json_body(Request, Body),
 	    buller:remove(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","remove_all"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:remove_all(Args),
+	    {200, "OK",
+	     [{content_type, "text/plain"}]};
+        ["v1","remove_all_and_clear"] ->
+	    Args = parse_json_body(Request, Body),
+	    buller:remove_all_and_clear(Args),
 	    {200, "OK",
 	     [{content_type, "text/plain"}]};
         _Tokens ->

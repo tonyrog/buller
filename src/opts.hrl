@@ -13,6 +13,8 @@
 %%       into {argl,Foo,[{K1,V1}... {Kn,Vn}]}
 -spec group_args(Options::[option()]) -> Options1::[option()].
 
+-compile({nowarn_unused_function, {group_args,1}}).
+
 group_args(Options) ->
     group_args_(Options,[]).
 
@@ -32,9 +34,11 @@ collect_args_(Options, Args) ->
 -spec getopt(Name::string(), Options::[option()]) ->
 	  undefined | Value::opt_value().
 
+-compile({nowarn_unused_function, {getopt,2}}).
 getopt(Name, Options) ->
     getopt(Name, Options, undefined).
 
+-compile({nowarn_unused_function, {getopt,3}}).
 getopt(Name, Options, Default) ->
     case getopt_(Name, Options) of
 	{ok,Value} -> Value;
@@ -43,6 +47,7 @@ getopt(Name, Options, Default) ->
 
 -spec getbool(Name::string(), Options::[option()]) -> boolean().
 
+-compile({nowarn_unused_function, {getbool,2}}).
 getbool(Name, Options) ->
     case getopt_(Name, Options) of
 	undefined -> false;
@@ -56,7 +61,8 @@ getopt_(Name, [_|Opts]) -> getopt_(Name, Opts);
 getopt_(_Name, []) -> undefined.
 
 -spec parse_opts(Args::[string()]) -> [option()].
-	   
+-compile({nowarn_unused_function, {parse_opts,1}}).
+
 parse_opts([]) ->
     [];
 parse_opts(Args) ->
