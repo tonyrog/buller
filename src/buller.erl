@@ -127,10 +127,9 @@ normalize(Commands) when is_list(Commands) ->
 
 args(List) when is_list(List) ->
     maps:from_list(
-      [if is_atom(Key) -> {Key,Value};
-	  is_binary(Key) -> {binary_to_atom(Key), arg_value(Value)};
-	  is_list(Key) -> 
-	       {binary_to_atom(iolist_to_binary(Key)), arg_value(Value)}
+      [if is_atom(Key) -> {unbslash(Key),Value};
+	  is_binary(Key) -> {unbslash(Key), arg_value(Value)};
+	  is_list(Key) -> {unbslash(iolist_to_binary(Key)), arg_value(Value)}
        end || {Key,Value} <- List]);
 args(Map) when is_map(Map) ->
     Map.
@@ -138,6 +137,18 @@ args(Map) when is_map(Map) ->
 arg_value(Bin) when is_binary(Bin) -> binary_to_list(Bin);
 arg_value(X) -> X.
 
+unbslash(Bin) when is_binary(Bin) ->
+    list_to_atom(unbslash_(binary_to_list(Bin)));  %% utf8?
+unbslash(List) when is_list(List) ->
+    list_to_atom(unbslash_(List));
+unbslash(Atom) when is_atom(Atom) ->
+    list_to_atom(unbslash_(atom_to_list(Atom))).
+		      
+unbslash_([$\\,C|Cs]) -> [C|unbslash_(Cs)];
+unbslash_([C|Cs]) ->  [C|unbslash_(Cs)];
+unbslash_([]) -> [].
+
+    
 call(Req, Args) ->
     Ref = make_ref(),
     ?BULLER_SERV ! {Req, {self(),Ref}, Args},
